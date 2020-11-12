@@ -18,11 +18,10 @@
  */
 package org.apache.pinot.broker.routing.segmentselector;
 
-import java.util.ArrayList;
 import java.util.Collections;
-import java.util.List;
 import java.util.Set;
 import org.apache.helix.model.ExternalView;
+import org.apache.helix.model.IdealState;
 import org.apache.pinot.common.request.BrokerRequest;
 
 
@@ -30,23 +29,23 @@ import org.apache.pinot.common.request.BrokerRequest;
  * Segment selector for offline table.
  */
 public class OfflineSegmentSelector implements SegmentSelector {
-  private volatile List<String> _segments;
+  private volatile Set<String> _segments;
 
   @Override
-  public void init(ExternalView externalView, Set<String> onlineSegments) {
-    onExternalViewChange(externalView, onlineSegments);
+  public void init(ExternalView externalView, IdealState idealState, Set<String> onlineSegments) {
+    onExternalViewChange(externalView, idealState, onlineSegments);
   }
 
   @Override
-  public void onExternalViewChange(ExternalView externalView, Set<String> onlineSegments) {
+  public void onExternalViewChange(ExternalView externalView, IdealState idealState, Set<String> onlineSegments) {
     // TODO: for new added segments, before all replicas are up, consider not selecting them to avoid causing
     //       hotspot servers
 
-    _segments = Collections.unmodifiableList(new ArrayList<>(onlineSegments));
+    _segments = Collections.unmodifiableSet(onlineSegments);
   }
 
   @Override
-  public List<String> select(BrokerRequest brokerRequest) {
+  public Set<String> select(BrokerRequest brokerRequest) {
     return _segments;
   }
 }

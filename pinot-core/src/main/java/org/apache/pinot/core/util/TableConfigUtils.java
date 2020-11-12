@@ -26,6 +26,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 import javax.annotation.Nullable;
 import org.apache.commons.collections.CollectionUtils;
 import org.apache.pinot.common.tier.TierFactory;
@@ -75,6 +76,8 @@ public final class TableConfigUtils {
     if (tableConfig.getTableType() == TableType.REALTIME) {
       Preconditions.checkState(schema != null, "Schema should not be null for REALTIME table");
     }
+    // Sanitize the table config before validation
+    sanitize(tableConfig);
     validateValidationConfig(tableConfig, schema);
     validateIngestionConfig(tableConfig.getIngestionConfig(), schema);
     validateTierConfigList(tableConfig.getTierConfigsList());
@@ -150,7 +153,7 @@ public final class TableConfigUtils {
       Preconditions.checkState(timeColumnName != null, "'timeColumnName' cannot be null in REALTIME table config");
     }
     // timeColumnName can be null in OFFLINE table
-    if (timeColumnName != null && schema != null) {
+    if (timeColumnName != null && !timeColumnName.isEmpty() && schema != null) {
       Preconditions.checkState(schema.getSpecForTimeColumn(timeColumnName) != null,
           "Cannot find valid fieldSpec for timeColumn: %s from the table config: %s, in the schema: %s", timeColumnName,
           tableConfig.getTableName(), schema.getSchemaName());
@@ -239,7 +242,7 @@ public final class TableConfigUtils {
    * Validates the upsert-related configurations
    *  - check table type is realtime
    *  - the primary key exists on the schema
-   *  - replica group is configured for routing type
+   *  - strict replica-group is configured for routing type
    *  - consumer type must be low-level
    */
   protected static void validateUpsertConfig(TableConfig tableConfig, Schema schema) {
@@ -262,9 +265,9 @@ public final class TableConfigUtils {
         "Upsert table must use low-level streaming consumer type");
     // replica group is configured for routing
     Preconditions.checkState(
-        tableConfig.getRoutingConfig() != null && RoutingConfig.REPLICA_GROUP_INSTANCE_SELECTOR_TYPE
+        tableConfig.getRoutingConfig() != null && RoutingConfig.STRICT_REPLICA_GROUP_INSTANCE_SELECTOR_TYPE
             .equalsIgnoreCase(tableConfig.getRoutingConfig().getInstanceSelectorType()),
-        "Upsert table must use replica-group (i.e. replicaGroup) based routing");
+        "Upsert table must use strict replica-group (i.e. strictReplicaGroup) based routing");
     // no startree index
     Preconditions.checkState(
         CollectionUtils.isEmpty(tableConfig.getIndexingConfig().getStarTreeIndexConfigs()) && !tableConfig
@@ -437,5 +440,30 @@ public final class TableConfigUtils {
       Preconditions.checkState(schema.getFieldSpecFor(columnName) != null,
           "Column Name " + columnName + " defined in field config list must be a valid column defined in the schema");
     }
+  }
+
+  private static void sanitize(TableConfig tableConfig) {
+    tableConfig.setIndexingConfig(sanitizeIndexingConfig(tableConfig.getIndexingConfig()));
+  }
+
+  private static IndexingConfig sanitizeIndexingConfig(IndexingConfig indexingConfig) {
+    indexingConfig.setInvertedIndexColumns(sanitizeListBasedIndexingColumns(indexingConfig.getInvertedIndexColumns()));
+    indexingConfig.setNoDictionaryColumns(sanitizeListBasedIndexingColumns(indexingConfig.getNoDictionaryColumns()));
+    indexingConfig.setSortedColumn(sanitizeListBasedIndexingColumns(indexingConfig.getSortedColumn()));
+    indexingConfig.setBloomFilterColumns(sanitizeListBasedIndexingColumns(indexingConfig.getBloomFilterColumns()));
+    indexingConfig
+        .setOnHeapDictionaryColumns(sanitizeListBasedIndexingColumns(indexingConfig.getOnHeapDictionaryColumns()));
+    indexingConfig.setRangeIndexColumns(sanitizeListBasedIndexingColumns(indexingConfig.getRangeIndexColumns()));
+    indexingConfig.setVarLengthDictionaryColumns(
+        sanitizeListBasedIndexingColumns(indexingConfig.getVarLengthDictionaryColumns()));
+    return indexingConfig;
+  }
+
+  private static List<String> sanitizeListBasedIndexingColumns(List<String> indexingColumns) {
+    if (indexingColumns != null) {
+      // Disregard the empty string value for indexing columns
+      return indexingColumns.stream().filter(v -> !v.isEmpty()).collect(Collectors.toList());
+    }
+    return null;
   }
 }

@@ -20,7 +20,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { makeStyles } from '@material-ui/core/styles';
-import { Grid, Checkbox, Button } from '@material-ui/core';
+import { Grid, Checkbox, Button, FormControl, Input, InputLabel } from '@material-ui/core';
 import Alert from '@material-ui/lab/Alert';
 import FileCopyIcon from '@material-ui/icons/FileCopy';
 import { TableData } from 'Models';
@@ -85,6 +85,9 @@ const useStyles = makeStyles((theme) => ({
   sqlError: {
     whiteSpace: 'pre-wrap',
   },
+  timeoutControl: {
+    bottom: 10
+  }
 }));
 
 const jsonoptions = {
@@ -115,6 +118,23 @@ const sqlFuntionsList = [
   'SUMMV', 'AVGMV', 'MINMAXRANGEMV', 'DISTINCTCOUNTMV', 'DISTINCTCOUNTBITMAPMV', 'DISTINCTCOUNTHLLMV',
   'DISTINCTCOUNTRAWHLLMV', 'DISTINCT', 'ST_UNION'];
 
+const responseStatCols = [
+  'timeUsedMs',
+  'numDocsScanned',
+  'totalDocs',
+  'numServersQueried',
+  'numServersResponded',
+  'numSegmentsQueried',
+  'numSegmentsProcessed',
+  'numSegmentsMatched',
+  'numConsumingSegmentsQueried',
+  'numEntriesScannedInFilter',
+  'numEntriesScannedPostFilter',
+  'numGroupsLimitReached',
+  'partialResponse',
+  'minConsumingFreshnessTimeMs'
+];
+
 const QueryPage = () => {
   const classes = useStyles();
   const [fetching, setFetching] = useState(true);
@@ -136,6 +156,8 @@ const QueryPage = () => {
   const [selectedTable, setSelectedTable] = useState('');
 
   const [inputQuery, setInputQuery] = useState('');
+
+  const [queryTimeout, setQueryTimeout] = useState('');
 
   const [outputResult, setOutputResult] = useState('');
 
@@ -166,16 +188,20 @@ const QueryPage = () => {
     setQueryLoader(true);
     let url;
     let params;
+    let timeoutStr = '';
+    if(queryTimeout !== ''){
+      timeoutStr = ` option(timeoutMs=${parseInt(queryTimeout, 10)})`
+    }
     if (checked.querySyntaxPQL) {
       url = 'pql';
       params = JSON.stringify({
-        pql: query || inputQuery.trim(),
+        pql: `${query || inputQuery.trim()}${timeoutStr}`,
         trace: checked.tracing,
       });
     } else {
       url = 'sql';
       params = JSON.stringify({
-        sql: query || inputQuery.trim(),
+        sql: `${query || inputQuery.trim()}${timeoutStr}`,
         trace: checked.tracing,
       });
     }
@@ -187,14 +213,15 @@ const QueryPage = () => {
     );
     setResultError(results.error || '');
     setResultData(results.result || { columns: [], records: [] });
-    setQueryStats(results.queryStats || { columns: [], records: [] });
+    setQueryStats(results.queryStats || { columns: responseStatCols, records: [] });
     setOutputResult(JSON.stringify(results.data, null, 2) || '');
     setQueryLoader(false);
   };
 
   const fetchSQLData = async (tableName) => {
-    const result = await PinotMethodUtils.getTableSchemaData(tableName, false);
-    setTableSchema(result);
+    const result = await PinotMethodUtils.getTableSchemaData(tableName);
+    const tableSchema = Utils.syncTableSchemaData(result, false);
+    setTableSchema(tableSchema);
 
     const query = `select * from ${tableName} limit 10`;
     setInputQuery(query);
@@ -342,6 +369,13 @@ const QueryPage = () => {
                 Query Syntax: PQL
               </Grid>
 
+              <Grid item xs={3}>
+                <FormControl fullWidth={true} className={classes.timeoutControl}>
+                  <InputLabel htmlFor="my-input">Timeout (in Milliseconds)</InputLabel>
+                  <Input id="my-input" type="number" value={queryTimeout} onChange={(e)=> setQueryTimeout(e.target.value)}/>
+                </FormControl>
+              </Grid>
+
               <Grid item xs={3} className={classes.runNowBtn}>
                 <Button
                   variant="contained"
@@ -363,7 +397,7 @@ const QueryPage = () => {
                   </Alert>
                 ) : (
                   <>
-                    {queryStats.records.length ? (
+                    {queryStats.columns.length ? (
                       <Grid item xs style={{ backgroundColor: 'white' }}>
                         <CustomizedTables
                           title="Query Response Stats"
@@ -375,7 +409,7 @@ const QueryPage = () => {
                     ) : null}
 
                     <Grid item xs style={{ backgroundColor: 'white' }}>
-                      {resultData.records.length ? (
+                      {resultData.columns.length ? (
                         <>
                           <Grid container className={classes.actionBtns}>
                             <Button
@@ -437,7 +471,7 @@ const QueryPage = () => {
                               showSearchBox={true}
                               inAccordionFormat={true}
                             />
-                          ) : resultData.records.length ? (
+                          ) : resultData.columns.length ? (
                             <SimpleAccordion
                               headerTitle="Query Result (JSON Format)"
                               showSearchBox={false}

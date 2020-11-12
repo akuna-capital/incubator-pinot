@@ -45,13 +45,16 @@ const CancelButton = withStyles(() => ({
 type Props = {
   open: boolean,
   handleClose: (event: React.MouseEvent<HTMLElement, MouseEvent>) => void,
-  handleSave: (event: React.MouseEvent<HTMLElement, MouseEvent>) => void,
+  handleSave?: (event: React.MouseEvent<HTMLElement, MouseEvent>) => void,
   title: string,
   children: any,
   btnCancelText?: string,
   btnOkText?: string,
   showCancelBtn?: boolean,
-  showOkBtn?: boolean
+  showOkBtn?: boolean,
+  size?: false | "xs" | "sm" | "md" | "lg" | "xl",
+  disableBackdropClick?: boolean
+  disableEscapeKeyDown?: boolean
 };
 
 export default function CustomDialog({
@@ -63,13 +66,25 @@ export default function CustomDialog({
   btnCancelText,
   btnOkText,
   showCancelBtn = true,
-  showOkBtn = true
+  showOkBtn = true,
+  size,
+  disableBackdropClick = false,
+  disableEscapeKeyDown = false
 }: Props) {
 
   const classes = useStyles();
 
   return (
-    <Dialog open={open} onClose={handleClose} aria-labelledby="form-dialog-title" className={classes.root}>
+    <Dialog
+      open={open}
+      onClose={handleClose}
+      aria-labelledby="form-dialog-title"
+      className={classes.root}
+      maxWidth={size}
+      fullWidth={size ? true : false}
+      disableBackdropClick={disableBackdropClick}
+      disableEscapeKeyDown={disableEscapeKeyDown}
+    >
       <DialogTitle className={classes.dialogTitle}>{title}</DialogTitle>
       {children}
       <DialogActions>

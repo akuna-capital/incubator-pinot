@@ -16,26 +16,33 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.pinot.broker.routing.segmentselector;
+package org.apache.pinot.core.operator.transform.function;
 
-import java.util.Set;
+import org.apache.pinot.common.function.TransformFunctionType;
 
 
 /**
- * The segment pre-selector filters the unnecessary online segments for the query.
- * <p>Segment pre-selector examples:
- * <ul>
- *   <li>
- *     For table with segment merge/rollup enabled, select the merged segments over the original segments with the same
- *     data
- *   </li>
- * </ul>
+ * The <code>OrOperatorTransformFunction</code> extends <code>LogicalOperatorTransformFunction</code> to
+ * implement the logical operator 'OR'.
+ *
+ * The results are in boolean format and stored as an integer array with 1 represents true and 0 represents false.
+ *
+ * SQL Syntax:
+ *    exprA OR exprB
+ *
  */
-public interface SegmentPreSelector {
+public class OrOperatorTransformFunction extends LogicalOperatorTransformFunction {
 
-  /**
-   * Process pre-selection for online segments to filter out unnecessary online segments. It is safe to modify the input
-   * online segments.
-   */
-  Set<String> preSelect(Set<String> onlineSegments);
+  @Override
+  public String getName() {
+    return TransformFunctionType.OR.getName();
+  }
+
+  @Override
+  int getLogicalFuncResult(int arg1, int arg2) {
+    if ((arg1 == 0) && (arg2 == 0)) {
+      return 0;
+    }
+    return 1;
+  }
 }

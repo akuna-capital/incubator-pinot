@@ -19,6 +19,7 @@
 package org.apache.pinot.broker.routing.segmentpruner;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -27,6 +28,7 @@ import javax.annotation.Nullable;
 import org.apache.helix.AccessOption;
 import org.apache.helix.ZNRecord;
 import org.apache.helix.model.ExternalView;
+import org.apache.helix.model.IdealState;
 import org.apache.helix.store.zk.ZkHelixPropertyStore;
 import org.apache.pinot.common.metadata.ZKMetadataProvider;
 import org.apache.pinot.common.metadata.segment.ColumnPartitionMetadata;
@@ -64,7 +66,7 @@ public class PartitionSegmentPruner implements SegmentPruner {
   }
 
   @Override
-  public void init(ExternalView externalView, Set<String> onlineSegments) {
+  public void init(ExternalView externalView, IdealState idealState, Set<String> onlineSegments) {
     // Bulk load partition info for all online segments
     int numSegments = onlineSegments.size();
     List<String> segments = new ArrayList<>(onlineSegments);
@@ -124,7 +126,8 @@ public class PartitionSegmentPruner implements SegmentPruner {
   }
 
   @Override
-  public synchronized void onExternalViewChange(ExternalView externalView, Set<String> onlineSegments) {
+  public synchronized void onExternalViewChange(ExternalView externalView, IdealState idealState,
+      Set<String> onlineSegments) {
     // NOTE: We don't update all the segment ZK metadata for every external view change, but only the new added/removed
     //       ones. The refreshed segment ZK metadata change won't be picked up.
     for (String segment : onlineSegments) {
@@ -146,12 +149,12 @@ public class PartitionSegmentPruner implements SegmentPruner {
   }
 
   @Override
-  public List<String> prune(BrokerRequest brokerRequest, List<String> segments) {
+  public Set<String> prune(BrokerRequest brokerRequest, Set<String> segments) {
     FilterQueryTree filterQueryTree = RequestUtils.generateFilterQueryTree(brokerRequest);
     if (filterQueryTree == null) {
       return segments;
     }
-    List<String> selectedSegments = new ArrayList<>();
+    Set<String> selectedSegments = new HashSet<>();
     for (String segment : segments) {
       PartitionInfo partitionInfo = _partitionInfoMap.get(segment);
       if (partitionInfo == null || partitionInfo == INVALID_PARTITION_INFO || isPartitionMatch(filterQueryTree,

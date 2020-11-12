@@ -30,7 +30,7 @@ type Props = {
   handleConfigChange: (value: string) => void,
 };
 
-export default function CustomModal({
+export default function EditConfigOp({
   showModal,
   hideModal,
   saveConfig,

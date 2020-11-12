@@ -62,7 +62,7 @@ public abstract class BaseClusterIntegrationTestSet extends BaseClusterIntegrati
   private static final String DEFAULT_PQL_QUERY_FILE_NAME =
       "On_Time_On_Time_Performance_2014_100k_subset.test_queries_500";
   private static final String DEFAULT_SQL_QUERY_FILE_NAME =
-      "On_Time_On_Time_Performance_2014_100k_subset.test_queries_10K.sql";
+      "On_Time_On_Time_Performance_2014_100k_subset.test_queries_500.sql";
   private static final int DEFAULT_NUM_QUERIES_TO_GENERATE = 100;
   private static final int DEFAULT_MAX_NUM_QUERIES_TO_SKIP_IN_QUERY_FILE = 200;
 
@@ -254,19 +254,57 @@ public abstract class BaseClusterIntegrationTestSet extends BaseClusterIntegrati
     testSqlQuery(query, Collections.singletonList(query));
 
     // IN_ID_SET
-    IdSet idSet = IdSets.create(FieldSpec.DataType.LONG);
-    idSet.add(19690L);
-    idSet.add(20355L);
-    idSet.add(21171L);
-    // Also include a non-existing id
-    idSet.add(0L);
-    String serializedIdSet = idSet.toBase64String();
-    String inIdSetQuery = "SELECT COUNT(*) FROM mytable WHERE INIDSET(AirlineID, '" + serializedIdSet + "') = 1";
-    String inQuery = "SELECT COUNT(*) FROM mytable WHERE AirlineID IN (19690, 20355, 21171, 0)";
-    testSqlQuery(inIdSetQuery, Collections.singletonList(inQuery));
-    String notInIdSetQuery = "SELECT COUNT(*) FROM mytable WHERE INIDSET(AirlineID, '" + serializedIdSet + "') = 0";
-    String notInQuery = "SELECT COUNT(*) FROM mytable WHERE AirlineID NOT IN (19690, 20355, 21171, 0)";
-    testSqlQuery(notInIdSetQuery, Collections.singletonList(notInQuery));
+    {
+      IdSet idSet = IdSets.create(FieldSpec.DataType.LONG);
+      idSet.add(19690L);
+      idSet.add(20355L);
+      idSet.add(21171L);
+      // Also include a non-existing id
+      idSet.add(0L);
+      String serializedIdSet = idSet.toBase64String();
+      String inIdSetQuery = "SELECT COUNT(*) FROM mytable WHERE INIDSET(AirlineID, '" + serializedIdSet + "') = 1";
+      String inQuery = "SELECT COUNT(*) FROM mytable WHERE AirlineID IN (19690, 20355, 21171, 0)";
+      testSqlQuery(inIdSetQuery, Collections.singletonList(inQuery));
+      String notInIdSetQuery = "SELECT COUNT(*) FROM mytable WHERE INIDSET(AirlineID, '" + serializedIdSet + "') = 0";
+      String notInQuery = "SELECT COUNT(*) FROM mytable WHERE AirlineID NOT IN (19690, 20355, 21171, 0)";
+      testSqlQuery(notInIdSetQuery, Collections.singletonList(notInQuery));
+    }
+
+    // IN_SUBQUERY
+    {
+      String inSubqueryQuery =
+          "SELECT COUNT(*) FROM mytable WHERE INSUBQUERY(DestAirportID, 'SELECT IDSET(DestAirportID) FROM mytable WHERE DaysSinceEpoch = 16430') = 1";
+      String inQuery =
+          "SELECT COUNT(*) FROM mytable WHERE DestAirportID IN (SELECT DestAirportID FROM mytable WHERE DaysSinceEpoch = 16430)";
+      testSqlQuery(inSubqueryQuery, Collections.singletonList(inQuery));
+
+      String notInSubqueryQuery =
+          "SELECT COUNT(*) FROM mytable WHERE INSUBQUERY(DestAirportID, 'SELECT IDSET(DestAirportID) FROM mytable WHERE DaysSinceEpoch = 16430') = 0";
+      String notInQuery =
+          "SELECT COUNT(*) FROM mytable WHERE DestAirportID NOT IN (SELECT DestAirportID FROM mytable WHERE DaysSinceEpoch = 16430)";
+      testSqlQuery(notInSubqueryQuery, Collections.singletonList(notInQuery));
+    }
+  }
+
+  /**
+   * Test hardcoded queries on server partitioned data (all the segments for a partition is served by a single server).
+   */
+  public void testHardcodedServerPartitionedSqlQueries()
+      throws Exception {
+    // IN_PARTITIONED_SUBQUERY
+    {
+      String inPartitionedSubqueryQuery =
+          "SELECT COUNT(*) FROM mytable WHERE INPARTITIONEDSUBQUERY(DestAirportID, 'SELECT IDSET(DestAirportID) FROM mytable WHERE DaysSinceEpoch = 16430') = 1";
+      String inQuery =
+          "SELECT COUNT(*) FROM mytable WHERE DestAirportID IN (SELECT DestAirportID FROM mytable WHERE DaysSinceEpoch = 16430)";
+      testSqlQuery(inPartitionedSubqueryQuery, Collections.singletonList(inQuery));
+
+      String notInPartitionedSubqueryQuery =
+          "SELECT COUNT(*) FROM mytable WHERE INPARTITIONEDSUBQUERY(DestAirportID, 'SELECT IDSET(DestAirportID) FROM mytable WHERE DaysSinceEpoch = 16430') = 0";
+      String notInQuery =
+          "SELECT COUNT(*) FROM mytable WHERE DestAirportID NOT IN (SELECT DestAirportID FROM mytable WHERE DaysSinceEpoch = 16430)";
+      testSqlQuery(notInPartitionedSubqueryQuery, Collections.singletonList(notInQuery));
+    }
   }
 
   /**
@@ -351,21 +389,13 @@ public abstract class BaseClusterIntegrationTestSet extends BaseClusterIntegrati
     assertNotNull(resourceUrl);
     File queryFile = new File(resourceUrl.getFile());
 
-    int maxNumQueriesToSkipInQueryFile = getMaxNumQueriesToSkipInQueryFile();
-    int queryId = 0;
     try (BufferedReader reader = new BufferedReader(new FileReader(queryFile))) {
-      while (true) {
-        int numQueriesSkipped = RANDOM.nextInt(maxNumQueriesToSkipInQueryFile);
-        for (int i = 0; i < numQueriesSkipped; i++) {
-          reader.readLine();
-          queryId++;
-        }
-        String queryString = reader.readLine();
-        queryId++;
-        LOGGER.info("Processing query id - {}", queryId);
-        // Reach end of file.
-        if (queryString == null) {
-          return;
+      String queryString;
+      while ((queryString = reader.readLine()) != null) {
+        // Skip commented line and empty line.
+        queryString = queryString.trim();
+        if (queryString.startsWith("#") || queryString.isEmpty()) {
+          continue;
         }
 
         JsonNode query = JsonUtils.stringToJsonNode(queryString);

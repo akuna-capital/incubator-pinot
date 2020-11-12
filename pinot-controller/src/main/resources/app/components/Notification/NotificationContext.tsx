@@ -16,20 +16,15 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.pinot.broker.routing.segmentselector;
 
-import org.apache.helix.ZNRecord;
-import org.apache.helix.store.zk.ZkHelixPropertyStore;
-import org.apache.pinot.spi.config.table.TableConfig;
+import * as React from 'react';
 
-
-public class SegmentPreSelectorFactory {
-  private SegmentPreSelectorFactory() {
-  }
-
-  public static SegmentPreSelector getSegmentPreSelector(TableConfig tableConfig,
-      ZkHelixPropertyStore<ZNRecord> propertyStore) {
-    String tableNameWithType = tableConfig.getTableName();
-    return new SegmentLineageBasedSegmentPreSelector(tableNameWithType, propertyStore);
-  }
+export interface NotificationContextInterface {
+  type: string,
+  message: string,
+  show: boolean,
+  hide: Function,
+  dispatch: React.Dispatch<any>;
 }
+
+export const NotificationContext = React.createContext<NotificationContextInterface>(null);
